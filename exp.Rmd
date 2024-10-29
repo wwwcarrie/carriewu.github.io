@@ -1,6 +1,5 @@
 
 ---
-site: mysite.yml
 output: 
   html_document
 ---
