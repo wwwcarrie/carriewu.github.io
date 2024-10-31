@@ -1,0 +1,141 @@
+---
+title: "NYC Restaurant Inspection Results"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library("p8105.datasets")
+library(tidyverse)
+library(plotly)
+library(dplyr)
+library(forcats)
+library(stringr)
+
+# Load dataset
+data("rest_inspec")
+
+# `rest_inspect` has 397584 observations and 18 variables (restaurant_name, borough, cuisine, inspection_date, violation_category, severity_points, total_score, grade, etc.)
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Chart A: 
+```{r}
+# Tidy dataset
+rest_inspec_filtered <- rest_inspec |>
+  # Select relevant columns for analysis
+  select(dba, boro, cuisine_description, inspection_date, score, grade) |>
+  # Filter to include only specific conditions
+  filter(
+    boro == "MANHATTAN",        # Filter for restaurants in Manhattan
+  ) |>
+  # Remove rows with missing grades or total score
+  drop_na(boro, cuisine_description, inspection_date, score, grade)
+
+# Create box plot to show score distribution for each cuisine type
+rest_inspec |>
+  filter(cuisine_description %in% c("American", "Chinese", "Japanese", "Mexican", "Caribbean"), !is.na(score)) |>  # select interest cuisine and drop NA
+  mutate(cuisine_description = fct_reorder(cuisine_description, score)) |> #reorder based on median of score
+  plot_ly(
+    y = ~score,
+    x = ~cuisine_description,
+    color = ~cuisine_description,
+    type = "box",
+    colors = "viridis"
+  ) %>%
+  layout(
+    title = "Score Distribution by Selected Cuisines",
+    xaxis = list(title = "Cuisine Type"),
+    yaxis = list(title = "Inspection Score"),
+        showlegend = FALSE
+  )
+
+#`rest_inspec_filtered` has 77338 observations and 6 variables (restaurant_name, borough, cuisine, inspection_date, violation_category, severity_points, total_score, grade, etc.)
+
+#**Inspection score vs. cuisine type**
+
+#The box plot shows that American and Japanese cuisines generally have lower median inspection scores, indicating fewer violations compared to Chinese, Caribbean, and Mexican cuisines. There is significant variability in the scores for all cuisines, with many outliers at higher scores, suggesting that some restaurants in each category have considerable issues with compliance.
+
+```
+
+Column {data-width=350}
+-----------------------------------------------------------------------
+
+### Chart B: 
+```{r}
+# Filter data to only include relevant grades
+borough_grades <- rest_inspec |>
+  filter(grade %in% c("A", "B", "C"), !is.na(boro)) |>  # Keep only rows with grades A, B, or C, and non-missing borough
+  count(boro, grade)  # Count the number of occurrences for each combination of borough and grade
+
+# Create a bar plot of grades by borough
+plot_ly(
+  data = borough_grades,
+  x = ~boro,
+  y = ~n,
+  color = ~grade,
+  type = "bar",
+  colors = "viridis"
+) %>%
+  layout(
+    title = "Number of A, B, C Grades by Borough",
+    xaxis = list(title = "Borough"),
+    yaxis = list(title = "Number of Restaurants"),
+    barmode = "group",  # Use group mode to display bars side by side
+    yaxis = list(title = "Number of Grades"),
+    legend = list(title = list(text = "Grade"))
+  )
+
+
+# `borough_grades` has 16 observations and 3 variables (boro, grade, n)
+
+#**Borough vs. Grade**
+
+#The bar plot shows that Manhattan has the highest number of restaurants with grades A, B, and C, followed by Brooklyn and Queens. The vast majority of restaurants in all boroughs have an A. 
+```
+
+### Chart C: 
+
+```{r}
+# Prepare the data to analyze seasonality by month
+monthly_scores <- rest_inspec |>
+  filter(!is.na(inspection_date), !is.na(score)) |>  # Remove rows with missing dates or scores
+  mutate(month = month(inspection_date, label = TRUE)) |>  # Extract the month from the inspection date
+  group_by(month) |>  # Group by month
+  summarize(avg_score = mean(score, na.rm = TRUE)) |>  # Calculate the average score for each month
+  ungroup()
+
+# Create a line plot of average inspection scores by month
+plot_ly(
+  data = monthly_scores,
+  x = ~month,
+  y = ~avg_score,
+  type = 'scatter',
+  mode = 'lines+markers',
+  line = list(shape = "linear"),
+  marker = list(size = 8),
+  colors = "viridis"
+) |>
+  layout(
+    title = "Average Inspection Score by Month",
+    xaxis = list(title = "Month"),
+    yaxis = list(title = "Average Inspection Score"),
+    showlegend = FALSE
+  )
+
+# `monthly score` has 12 observations (month) and 2 variables (month and average score)
+
+#**Average inspection score vs. month**
+
+#The line plot shows that average inspection scores are generally higher during the summer months (June to September), indicating more health code violations. Scores tend to decrease significantly in the winter months, suggesting better compliance during that time.
+```
+
+
+
+
+rmarkdown::render("inspection.Rmd", output_format = "flexdashboard::flex_dashboard")
